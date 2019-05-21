@@ -1,31 +1,53 @@
-import Client from "../Client.js";
+import { Client } from '../Client.js';
+import { takeUntil } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import {
+  initLanguageCodeObject,
+  defaultLanguage
+} from '../Utilities/LanguageCodes';
+import { spinnerService } from '@chevtek/react-spinners';
 
+let unsubscribe = new Subject();
 let changeListeners = [];
-let coffees = [];
-let processings = [];
-let productStatuses = [];
+const resetStore = () => ({
+  coffees: initLanguageCodeObject(),
+  processings: [],
+  productStatuses: []
+});
+let { coffees, processings, productStatuses } = resetStore();
 
 let notifyChange = () => {
-  changeListeners.forEach((listener) => {
+  changeListeners.forEach(listener => {
     listener();
   });
-}
+};
 
-let fetchCoffees = () => {
-
-  Client.items()
+let fetchCoffees = language => {
+  var query = Client.items()
     .type('coffee')
-    .orderParameter('elements.product_name')
-    .get()
+    .orderParameter('elements.product_name');
+
+  if (language) {
+    query.languageParameter(language);
+  }
+
+  query
+    .getObservable()
+    .pipe(takeUntil(unsubscribe))
     .subscribe(response => {
-      coffees = response.items;
+      if (language) {
+        coffees[language] = response.items;
+      } else {
+        coffees[defaultLanguage] = response.items;
+      }
       notifyChange();
     });
-}
+};
 
 let fetchProcessings = () => {
-  Client.taxonomy("processing")
-    .get()
+  Client.taxonomy('processing')
+    .getObservable()
+    .pipe(takeUntil(unsubscribe))
     .subscribe(response => {
       processings = response.taxonomy.terms;
       notifyChange();
@@ -33,13 +55,14 @@ let fetchProcessings = () => {
 };
 
 let fetchProductStatuses = () => {
-  Client.taxonomy("product_status")
-    .get()
+  Client.taxonomy('product_status')
+    .getObservable()
+    .pipe(takeUntil(unsubscribe))
     .subscribe(response => {
       productStatuses = response.taxonomy.terms;
       notifyChange();
     });
-}
+};
 
 export class Filter {
   constructor() {
@@ -48,7 +71,9 @@ export class Filter {
   }
 
   matches(coffee) {
-    return this.matchesProcessings(coffee) && this.matchesProductStatuses(coffee);
+    return (
+      this.matchesProcessings(coffee) && this.matchesProductStatuses(coffee)
+    );
   }
 
   matchesProcessings(coffee) {
@@ -74,53 +99,72 @@ export class Filter {
   toggleProcessing(processing) {
     let index = this.processings.indexOf(processing);
 
-    if (index < 0) this.processings.push(processing); else this.processings.splice(index, 1);
+    if (index < 0) this.processings.push(processing);
+    else this.processings.splice(index, 1);
   }
 
   toggleProductStatus(status) {
     let index = this.productStatuses.indexOf(status);
 
-    if (index < 0) this.productStatuses.push(status); else this.productStatuses.splice(index, 1);
+    if (index < 0) this.productStatuses.push(status);
+    else this.productStatuses.splice(index, 1);
   }
 }
 
 let coffeeFilter = new Filter();
 
-class CoffeeStore {
-
+class Coffee {
   // Actions
 
-  provideCoffee(coffeeSlug) {
-    fetchCoffees();
+  provideCoffee(language) {
+    if (spinnerService.isShowing('apiSpinner') === false) {
+      spinnerService.show('apiSpinner');
+    }
+    fetchCoffees(language);
   }
 
-  provideCoffees() {
-    fetchCoffees();
+  provideCoffees(language) {
+    if (spinnerService.isShowing('apiSpinner') === false) {
+      spinnerService.show('apiSpinner');
+    }
+    fetchCoffees(language);
   }
 
   provideProcessings() {
+    if (spinnerService.isShowing('apiSpinner') === false) {
+      spinnerService.show('apiSpinner');
+    }
     fetchProcessings();
   }
 
   provideProductStatuses() {
+    if (spinnerService.isShowing('apiSpinner') === false) {
+      spinnerService.show('apiSpinner');
+    }
     fetchProductStatuses();
   }
 
   // Methods
 
-  getCoffee(coffeeSlug) {
-    return coffees.find((coffee) => coffee.urlPattern.value === coffeeSlug);
+  getCoffee(coffeeSlug, language) {
+    spinnerService.hide('apiSpinner');
+    return coffees[language || defaultLanguage].find(
+      coffee => coffee.urlPattern.value === coffeeSlug
+    );
   }
 
-  getCoffees() {
-    return coffees;
+  getCoffees(language) {
+    spinnerService.hide('apiSpinner');
+    return coffees[language];
   }
 
   getProcessings() {
+    spinnerService.hide('apiSpinner');
     return processings;
   }
 
   getProductStatuses() {
+    spinnerService.hide('apiSpinner');
     return productStatuses;
   }
 
@@ -140,11 +184,18 @@ class CoffeeStore {
   }
 
   removeChangeListener(listener) {
-    changeListeners = changeListeners.filter((element) => {
+    changeListeners = changeListeners.filter(element => {
       return element !== listener;
     });
   }
 
+  unsubscribe() {
+    unsubscribe.next();
+    unsubscribe.complete();
+    unsubscribe = new Subject();
+  }
 }
 
-export default new CoffeeStore();
+let CoffeeStore = new Coffee();
+
+export { CoffeeStore, resetStore };

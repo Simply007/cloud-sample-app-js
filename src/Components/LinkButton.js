@@ -1,7 +1,8 @@
 import React from 'react';
-import { Link } from 'react-router'
 
-const LinkButton = (props) => {
+import Link from '../Components/LowerCaseUrlLink';
+
+const LinkButton = props => {
   return (
     <div className="row">
       <div className="clear center-text">
