@@ -17,7 +17,9 @@ const OurStory = props => {
           }
         >
           {fact.description && (
-            <div dangerouslySetInnerHTML={{ __html: fact.description.value }} />
+            <div
+              dangerouslySetInnerHTML={{ __html: fact.description.getHtml() }}
+            />
           )}
         </div>
       </div>
